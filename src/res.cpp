@@ -86,6 +86,42 @@ game_value Result::cmd_toParsedArray(game_state& state, game_value_parameter rig
             case mariadb::value::date: row.emplace_back(res->get_date(i).str()); break;
             case mariadb::value::date_time: row.emplace_back(res->get_date_time(i).str()); break;
             case mariadb::value::time: row.emplace_back(res->get_time(i).str_time()); break;
+            case mariadb::value::blob: {
+                auto content = res->get_blobString(i);
+
+                if (content.front() == '[') {//array
+                    //attempt parse
+                    auto arrayContent = sqf::parse_simple_array(content);
+
+                    if (state.get_evaluator()->_errorType == game_state::game_evaluator::evaluator_error_type::gen
+                        || 
+                        (!arrayContent.empty() && arrayContent.front().is_null())
+                        ) {
+                        state.get_evaluator()->_errorType = game_state::game_evaluator::evaluator_error_type::ok; //Force ignore
+                        row.emplace_back(std::move(content));
+                    } else
+                        row.emplace_back(game_value(arrayContent));
+                } else if (
+                    content.front() == 't'//true
+                    || content.front() == 'T'//True
+                    || content.front() == 'f'//false
+                    || content.front() == 'F'//False
+                    || (content.front() >= '0' && content.front() <= '9')//number
+                    ) {
+
+                    auto arrayContent = sqf::parse_simple_array(r_string("["sv)+content+"]"sv);
+
+                    if (state.get_evaluator()->_errorType == game_state::game_evaluator::evaluator_error_type::gen
+                        || arrayContent.empty() 
+                        || arrayContent.front().is_null()) {
+                        state.get_evaluator()->_errorType = game_state::game_evaluator::evaluator_error_type::ok; //Force ignore
+                        row.emplace_back(std::move(content));
+                    } else
+                        row.emplace_back(arrayContent.front());
+                } else {
+                    row.emplace_back(std::move(content));
+                }
+            } break;
             case mariadb::value::string: {
                 auto content = res->get_string(i);
 
